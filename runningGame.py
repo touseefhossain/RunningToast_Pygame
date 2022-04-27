@@ -1,6 +1,7 @@
 # simple running game developed by Touseef Hossain
 # tutorial content used in this code found from
 # https://www.youtube.com/watch?v=AY9MnQ4x3zk
+from time import time
 import pygame
 from sys import exit
 from random import randint
@@ -14,9 +15,23 @@ running = True
 # window and frame settings
 pygame.init() # initialize the pygame module (like starting a car with key)
 screen = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT)) # display size
-pygame.display.set_caption('RunningToast')
+pygame.display.set_caption('Toasty Run')
 timer = pygame.time.Clock()
 bgTextStyle = pygame.font.Font('Grand9K Pixel.ttf', 50)
+timeTextStyle = pygame.font.Font('Grand9K Pixel.ttf', 20)
+pygame.mixer.music.set_volume(0.7)
+
+# 'start menu' state background settings
+intro_text = bgTextStyle.render('TOASTY RUN', False, 'white')
+intro_rect = intro_text.get_rect(center = (400, 80))
+instr_text1 = timeTextStyle.render('Jump over obstacles', False, 'white')
+instr_rect1 = instr_text1.get_rect(center = (400, 200))
+instr_text2 = timeTextStyle.render('using SPACE', False, 'white')
+instr_rect2 = instr_text2.get_rect(center = (400, 220))
+instr_text3 = timeTextStyle.render('Press SPACE to begin', False, 'white')
+instr_rect3 = instr_text3.get_rect(center = (400, 300))
+pygame.mixer.music.load('Audio/Rivers in the Desert (8-bit).mp3')
+pygame.mixer.music.play()
 
 # 'playing' state background settings
 background =  pygame.image.load('Graphics/kitchen_BG.jpg').convert()
@@ -25,7 +40,6 @@ bgX = 0
 bgX2 = DISPLAY_WIDTH
 bgSpeed = 2
 
-timeTextStyle = pygame.font.Font('Grand9K Pixel.ttf', 20)
 start_time = 0 # timer that will help with maintaining accurate time whenever the game restarts
 game_time = 0 # used to display total play time for a game
 
@@ -96,11 +110,18 @@ sprite_frame_rate = 100
 sprite_timer = pygame.USEREVENT + 1
 pygame.time.set_timer(sprite_timer, sprite_frame_rate)
 
+# load idle player animation for 'start menu' state
+toast_idle_image = pygame.image.load('Graphics/toast_idle.png').convert_alpha()
+toast_idle_sprite = sprite.Sprite(toast_idle_image, 64)
+toast_idle_rect = toast_idle_sprite.currentFrame().get_rect(midbottom = (60, 380))
+
 # load player object and initiate player parameters
 toast_move_image = pygame.image.load('Graphics/toast_move.png').convert_alpha()
 toast_move_sprite = sprite.Sprite(toast_move_image, 64)
 toast_rect = toast_move_sprite.currentFrame().get_rect(midbottom =(60, 380))
 toast_gravity = 0
+jump_sound = pygame.mixer.Sound('Audio/SonicJump.mp3')
+jump_sound.set_volume(0.7)
 pygame.display.set_icon(toast_move_sprite.currentFrame()) # set window icon
 
 # load obstacle objects
@@ -118,7 +139,7 @@ enemy_list = []
 
 # move the obstacles according to their respective type
 def enemyMovement(list):
-    global score
+    global score, enemy_spawn_rate, bgSpeed
     if list:
         for enemy in list:
             if enemy.centery == 250:
@@ -130,10 +151,12 @@ def enemyMovement(list):
             if enemy.left <= -100:
                 list.remove(enemy)
                 score += 1
+                if score%5 == 0 and enemy_spawn_rate > 1000:
+                    enemy_spawn_rate -= 150
+                    pygame.time.set_timer(enemy_timer, enemy_spawn_rate)
+                elif score%10 == 0: bgSpeed += 0.4
         return list
     else: return []
-
-game_active = True # state of the game (switch from playing and 'game over' screen)
 
 # check for collisions between player and obstacles
 # change state of game if collision occurs
@@ -142,8 +165,14 @@ def collisionCheck(player, enemies):
         for enemy in enemies:
             if player.colliderect(enemy): 
                 enemies.clear()
+                pygame.mixer.music.unload()
+                pygame.mixer.music.load('Audio/Eterna City (Daytime) (8-bit).mp3')
+                pygame.mixer.music.play()
                 return False
     return True
+
+game_active = True # state of the game (switch from playing and 'game over' screen)
+start_menu = True # initial state of the game 
 
 # ensure that program doesn't end unless prompted
 while running: 
@@ -153,10 +182,18 @@ while running:
             running = False
             exit() # leave the 'while TRUE' loop securely with sys exit
         
-        if game_active: # event handler for playing state
+        if start_menu:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                start_menu = False
+                pygame.mixer.music.unload()
+                pygame.mixer.music.load("Audio/Il Vento D'Oro (8-bit).mp3")
+                pygame.mixer.music.play()
+
+        elif game_active: # event handler for playing state
             if event.type == pygame.KEYDOWN: # keyboard inputs
                 if event.key == pygame.K_SPACE: # spacebar key
                     if toast_rect.bottom == 380: # ensure only a single jump from ground
+                        jump_sound.play()
                         toast_gravity = -16 # when pressed, send toast upwards
         
         else: # event handler for 'game over' state (reset necessary variables)
@@ -166,19 +203,32 @@ while running:
                 score = 0
                 toast_rect.bottom = 380
                 toast_gravity = 0
+                pygame.mixer.music.unload()
+                pygame.mixer.music.load("Audio/Il Vento D'Oro (8-bit).mp3")
+                pygame.mixer.music.play()
         
-        if event.type == enemy_timer and game_active: # timer for enemy spawn
+        if event.type == enemy_timer and game_active and not start_menu: # timer for enemy spawn
             if randint(0,2): # function that "randomizes" the type of enemy spawned
                 enemy_list.append(egg_move_sprite.currentFrame().get_rect(center = (randint(900,1100), 250)))
             else:
                 enemy_list.append(toaster_move_sprite.currentFrame().get_rect(midbottom = (randint(900,1100), 380)))
         
-        if event.type == sprite_timer and game_active: # timer for sprite animation transition
+        if event.type == sprite_timer and start_menu: toast_idle_sprite.nextFrame()
+
+        elif event.type == sprite_timer and game_active: # timer for sprite animation transition
             egg_move_sprite.nextFrame()
             toaster_move_sprite.nextFrame()
             toast_move_sprite.nextFrame()
 
-    if game_active: # 'playing' state
+    if start_menu: # 'start menu' state
+        screen.fill('skyblue3')
+        screen.blit(toast_idle_sprite.currentFrame(), toast_idle_rect)
+        screen.blit(intro_text, intro_rect)
+        screen.blit(instr_text1, instr_rect1)
+        screen.blit(instr_text2, instr_rect2)
+        screen.blit(instr_text3, instr_rect3)
+
+    elif game_active: # 'playing' state
         redrawBackground()
         screen.blit(toast_move_sprite.currentFrame(), toast_rect)
 
