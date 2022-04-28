@@ -21,6 +21,12 @@ bgTextStyle = pygame.font.Font('Grand9K Pixel.ttf', 50)
 timeTextStyle = pygame.font.Font('Grand9K Pixel.ttf', 20)
 pygame.mixer.music.set_volume(0.7)
 
+# change the music depending on the state of the game
+def changeMusic(music):
+    pygame.mixer.music.unload()
+    pygame.mixer.music.load(music)
+    pygame.mixer.music.play()
+
 # 'start menu' state background settings
 intro_text = bgTextStyle.render('TOASTY RUN', False, 'white')
 intro_rect = intro_text.get_rect(center = (400, 80))
@@ -30,8 +36,8 @@ instr_text2 = timeTextStyle.render('using SPACE', False, 'white')
 instr_rect2 = instr_text2.get_rect(center = (400, 220))
 instr_text3 = timeTextStyle.render('Press SPACE to begin', False, 'white')
 instr_rect3 = instr_text3.get_rect(center = (400, 300))
-pygame.mixer.music.load('Audio/Rivers in the Desert (8-bit).mp3')
-pygame.mixer.music.play()
+changeMusic('Audio/Rivers in the Desert (8-bit).mp3')
+
 
 # 'playing' state background settings
 background =  pygame.image.load('Graphics/kitchen_BG.jpg').convert()
@@ -151,8 +157,8 @@ def enemyMovement(list):
             if enemy.left <= -100:
                 list.remove(enemy)
                 score += 1
-                if score%5 == 0 and enemy_spawn_rate > 1000:
-                    enemy_spawn_rate -= 150
+                if score%5 == 0 and enemy_spawn_rate > 600:
+                    enemy_spawn_rate -= 200
                     pygame.time.set_timer(enemy_timer, enemy_spawn_rate)
                 elif score%10 == 0: bgSpeed += 0.4
         return list
@@ -165,14 +171,12 @@ def collisionCheck(player, enemies):
         for enemy in enemies:
             if player.colliderect(enemy): 
                 enemies.clear()
-                pygame.mixer.music.unload()
-                pygame.mixer.music.load('Audio/Eterna City (Daytime) (8-bit).mp3')
-                pygame.mixer.music.play()
+                changeMusic('Audio/Eterna City (Daytime) (8-bit).mp3')
                 return False
     return True
 
 game_active = True # state of the game (switch from playing and 'game over' screen)
-start_menu = True # initial state of the game 
+start_menu = True # initial state of the game
 
 # ensure that program doesn't end unless prompted
 while running: 
@@ -185,9 +189,8 @@ while running:
         if start_menu:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 start_menu = False
-                pygame.mixer.music.unload()
-                pygame.mixer.music.load("Audio/Il Vento D'Oro (8-bit).mp3")
-                pygame.mixer.music.play()
+                changeMusic("Audio/Il Vento D'Oro (8-bit).mp3")
+                start_time = pygame.time.get_ticks()
 
         elif game_active: # event handler for playing state
             if event.type == pygame.KEYDOWN: # keyboard inputs
@@ -203,9 +206,7 @@ while running:
                 score = 0
                 toast_rect.bottom = 380
                 toast_gravity = 0
-                pygame.mixer.music.unload()
-                pygame.mixer.music.load("Audio/Il Vento D'Oro (8-bit).mp3")
-                pygame.mixer.music.play()
+                changeMusic("Audio/Il Vento D'Oro (8-bit).mp3")
         
         if event.type == enemy_timer and game_active and not start_menu: # timer for enemy spawn
             if randint(0,2): # function that "randomizes" the type of enemy spawned
