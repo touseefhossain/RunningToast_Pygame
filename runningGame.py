@@ -5,8 +5,9 @@ from time import time
 import pygame
 from sys import exit
 from random import randint
-import spritesheet
 import sprite
+import toastPlayer
+import runningEnemy
 
 DISPLAY_WIDTH = 800
 DISPLAY_HEIGHT = 400
@@ -38,6 +39,14 @@ instr_text3 = timeTextStyle.render('Press SPACE to begin', False, 'white')
 instr_rect3 = instr_text3.get_rect(center = (400, 300))
 changeMusic('Audio/Rivers in the Desert (8-bit).mp3')
 
+def startMenu():
+    screen.fill('skyblue3')
+    screen.blit(toast_idle_sprite.currentFrame(), toast_idle_rect)
+    screen.blit(intro_text, intro_rect)
+    screen.blit(instr_text1, instr_rect1)
+    screen.blit(instr_text2, instr_rect2)
+    screen.blit(instr_text3, instr_rect3)
+
 
 # 'playing' state background settings
 background =  pygame.image.load('Graphics/kitchen_BG.jpg').convert()
@@ -48,7 +57,6 @@ bgSpeed = 2
 
 start_time = 0 # timer that will help with maintaining accurate time whenever the game restarts
 game_time = 0 # used to display total play time for a game
-
 score = 0
 
 # 'game over' state background settings
@@ -58,11 +66,22 @@ gg_continue_text = timeTextStyle.render('Try Again? ( SPACE )', False, 'white')
 gg_continue_rect = gg_continue_text.get_rect(center = (400, 350))
 
 toast_defeat_image = pygame.image.load('Graphics/toast_defeat.png').convert_alpha()
-toast_defeat_sprite = spritesheet.SpriteSheet(toast_defeat_image)
-toast_defeat_surface = toast_defeat_sprite.getFrame(0, 64, 64)
-toast_defeat_surface = pygame.transform.rotozoom(toast_defeat_surface, 0, 1.6) # filter, scale, rotate
-toast_defeat_surface.set_colorkey('black')
-toast_defeat_rect = toast_defeat_surface.get_rect(center = (400, 200))
+toast_defeat_image = pygame.transform.rotozoom(toast_defeat_image, 0, 1.6) # filter, scale, rotate
+toast_defeat_image.set_colorkey('black')
+toast_defeat_rect = toast_defeat_image.get_rect(center = (400, 200))
+
+def gameOverScreen():
+    screen.fill('lightslateblue')
+    game_time_surface = timeTextStyle.render(f'Time: {game_time}', False, 'white') 
+    game_time_rect = game_time_surface.get_rect(topleft=(150, 250))
+    game_score_surface = timeTextStyle.render(f'Score: {score}', False, 'white') 
+    game_score_rect = game_score_surface.get_rect(topleft=(550, 250))
+    screen.blit(gg_text, gg_rect)
+    screen.blit(toast_defeat_image, toast_defeat_rect)
+    screen.blit(game_time_surface, game_time_rect)
+    screen.blit(game_score_surface, game_score_rect)
+    screen.blit(gg_continue_text, gg_continue_rect)
+
 
 def displayTime():
     global game_time
@@ -79,7 +98,6 @@ def formatTime(time):
     while seconds >= 60: # get number of minutes
         minutes += 1
         seconds -= 60
-    
     # ensure there's always two digits shown on each time interval
     seconds = str(seconds).zfill(2)
     minutes = str(minutes).zfill(2)
@@ -121,56 +139,40 @@ toast_idle_image = pygame.image.load('Graphics/toast_idle.png').convert_alpha()
 toast_idle_sprite = sprite.Sprite(toast_idle_image, 64)
 toast_idle_rect = toast_idle_sprite.currentFrame().get_rect(midbottom = (60, 380))
 
-# load player object and initiate player parameters
-toast_move_image = pygame.image.load('Graphics/toast_move.png').convert_alpha()
-toast_move_sprite = sprite.Sprite(toast_move_image, 64)
-toast_rect = toast_move_sprite.currentFrame().get_rect(midbottom =(60, 380))
-toast_gravity = 0
-jump_sound = pygame.mixer.Sound('Audio/SonicJump.mp3')
-jump_sound.set_volume(0.7)
-pygame.display.set_icon(toast_move_sprite.currentFrame()) # set window icon
+# load player object
+player = toastPlayer.Toast()
+pygame.display.set_icon(toast_idle_sprite.currentFrame()) # set window icon
 
-# load obstacle objects
-egg_move_image = pygame.image.load('Graphics/egg_move.png').convert_alpha()
-egg_move_sprite = sprite.Sprite(egg_move_image, 64)
-
-toaster_move_image = pygame.image.load('Graphics/toaster_move.png').convert_alpha()
-toaster_move_sprite = sprite.Sprite(toaster_move_image, 64)
-
-# initiate timer for enemy spawn rate and list for enemies present on screen
+# load enemy-related objects
 enemy_spawn_rate = 3000
 enemy_timer = pygame.USEREVENT + 2
 pygame.time.set_timer(enemy_timer, enemy_spawn_rate)
 enemy_list = []
 
 # move the obstacles according to their respective type
-def enemyMovement(list):
-    global score, enemy_spawn_rate, bgSpeed
-    if list:
-        for enemy in list:
-            if enemy.centery == 250:
-                enemy.left -= 5
-                screen.blit(egg_move_sprite.currentFrame(), enemy)
-            else:
-                enemy.left -= 4
-                screen.blit(toaster_move_sprite.currentFrame(), enemy)
-            if enemy.left <= -100:
-                list.remove(enemy)
+def enemyMovement():
+    global score, enemy_spawn_rate, bgSpeed, enemy_list
+    if enemy_list:
+        for enemy in enemy_list:
+            enemy.move(screen)
+            if enemy.outOfBounds():
+                enemy_list.remove(enemy)
                 score += 1
                 if score%5 == 0 and enemy_spawn_rate > 600:
                     enemy_spawn_rate -= 200
                     pygame.time.set_timer(enemy_timer, enemy_spawn_rate)
                 elif score%10 == 0: bgSpeed += 0.4
-        return list
+        return enemy_list
     else: return []
 
 # check for collisions between player and obstacles
 # change state of game if collision occurs
-def collisionCheck(player, enemies):
-    if enemies:
-        for enemy in enemies:
-            if player.colliderect(enemy): 
-                enemies.clear()
+def collisionCheck():
+    global enemy_list, player
+    if enemy_list:
+        for enemy in enemy_list:
+            if player.getRect().colliderect(enemy.getRect()): 
+                enemy_list.clear()
                 changeMusic('Audio/Eterna City (Daytime) (8-bit).mp3')
                 return False
     return True
@@ -189,74 +191,42 @@ while running:
         if start_menu:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 start_menu = False
+                game_active = True
                 changeMusic("Audio/Il Vento D'Oro (8-bit).mp3")
                 start_time = pygame.time.get_ticks()
 
-        elif game_active: # event handler for playing state
-            if event.type == pygame.KEYDOWN: # keyboard inputs
-                if event.key == pygame.K_SPACE: # spacebar key
-                    if toast_rect.bottom == 380: # ensure only a single jump from ground
-                        jump_sound.play()
-                        toast_gravity = -16 # when pressed, send toast upwards
-        
-        else: # event handler for 'game over' state (reset necessary variables)
+        elif not game_active: # event handler for 'game over' state (reset necessary variables)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 game_active = True
                 start_time = pygame.time.get_ticks()
                 score = 0
-                toast_rect.bottom = 380
-                toast_gravity = 0
+                player.reset()
                 changeMusic("Audio/Il Vento D'Oro (8-bit).mp3")
         
         if event.type == enemy_timer and game_active and not start_menu: # timer for enemy spawn
             if randint(0,2): # function that "randomizes" the type of enemy spawned
-                enemy_list.append(egg_move_sprite.currentFrame().get_rect(center = (randint(900,1100), 250)))
+                enemy_list.append(runningEnemy.Enemy('egg'))
             else:
-                enemy_list.append(toaster_move_sprite.currentFrame().get_rect(midbottom = (randint(900,1100), 380)))
+                enemy_list.append(runningEnemy.Enemy('toaster'))
         
         if event.type == sprite_timer and start_menu: toast_idle_sprite.nextFrame()
 
         elif event.type == sprite_timer and game_active: # timer for sprite animation transition
-            egg_move_sprite.nextFrame()
-            toaster_move_sprite.nextFrame()
-            toast_move_sprite.nextFrame()
+            player.animate()
+            for enemy in enemy_list:
+                enemy.animate()
 
     if start_menu: # 'start menu' state
-        screen.fill('skyblue3')
-        screen.blit(toast_idle_sprite.currentFrame(), toast_idle_rect)
-        screen.blit(intro_text, intro_rect)
-        screen.blit(instr_text1, instr_rect1)
-        screen.blit(instr_text2, instr_rect2)
-        screen.blit(instr_text3, instr_rect3)
+        startMenu()
 
     elif game_active: # 'playing' state
         redrawBackground()
-        screen.blit(toast_move_sprite.currentFrame(), toast_rect)
+        player.update(screen)
+        enemy_list = enemyMovement()
+        game_active = collisionCheck()
 
-        # simulate jumping with gravity
-        toast_gravity+=0.6
-        toast_rect.y += toast_gravity
-
-        enemy_list = enemyMovement(enemy_list)
-        game_active = collisionCheck(toast_rect, enemy_list)
-
-        # maintain floor for toast player
-        if toast_rect.bottom >= 380: 
-            toast_rect.bottom = 380
-            toast_gravity = 0 # reset gravity, rather than have gravity infinitely increasing
-
-        
     else: # 'game over' state
-        screen.fill('lightslateblue')
-        game_time_surface = timeTextStyle.render(f'Time: {game_time}', False, 'white') 
-        game_time_rect = game_time_surface.get_rect(topleft=(150, 250))
-        game_score_surface = timeTextStyle.render(f'Score: {score}', False, 'white') 
-        game_score_rect = game_score_surface.get_rect(topleft=(550, 250))
-        screen.blit(gg_text, gg_rect)
-        screen.blit(toast_defeat_surface, toast_defeat_rect)
-        screen.blit(game_time_surface, game_time_rect)
-        screen.blit(game_score_surface, game_score_rect)
-        screen.blit(gg_continue_text, gg_continue_rect)
+        gameOverScreen()
 
     pygame.display.update() # updates the display continuously
     timer.tick(60) # ensure that while loop does not run more than 60 times per second (max frame rate)
